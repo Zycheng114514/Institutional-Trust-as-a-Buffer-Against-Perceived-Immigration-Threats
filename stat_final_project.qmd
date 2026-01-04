@@ -1,0 +1,254 @@
+---
+title: "Institutional Trust as a Buffer Against Perceived Immigration Threats"
+subtitle: "A Comparative Analysis of Four East Asian Societies"
+author: "Zhiyang(Chris) Cheng, Jinwen(Wendy) Xiao"
+format: 
+  html:
+    mainfont: "Times New Roman"
+    fontsize: 12pt
+    linestretch: 1.0
+---
+
+```{r, include=FALSE}
+library(pacman)
+p_load(tidyverse,ggplot2,haven,interactions,sjPlot,psych,patchwork,stargazer)
+dta <- readRDS("data/WVS_Cross-National_Wave_7_rds_v6_0.rds")
+
+dta$B_COUNTRY_num <- as.numeric(dta$B_COUNTRY)
+
+#extract needed variables
+df_analysis <- dta %>%
+  filter(B_COUNTRY_num %in% c(344, 702, 158, 156)) %>% 
+  select(
+    Country = B_COUNTRY_num,
+    Q121, # The Overall impact of immigrants on the country (1-5, 5=Very Good)
+    Q124, Q126, Q128, Q129, # Perceived harms (Crime, Terror, Jobs, Conflict)(0-2,2 means agree, which is the most negative view)
+    Q69, Q70, Q71, Q74, # Government Trust (Police, Courts, Gov, Civil Service)(1-4,1 means trust the most)
+#   Q21,  #This is causing post-treatment effect. Neighbor Preference (Immigrants/Foreign workers)(1 is dislike, 2 is did not meantion)
+    Q275, Q288, Q262 # Controls: Education(1-8,larger better), Income(1-10, larger better), Age
+  ) %>%
+  zap_labels() %>%
+  mutate(across(everything(), as.numeric))
+
+# reorgnize the variables
+df_clean <- df_analysis %>%
+  # Convert unusual values to R's NA
+  mutate(across(everything(), ~ifelse(.x < 0, NA, .x))) %>%
+  mutate(
+    Region = factor(Country, 
+                    levels = c(344, 702, 158, 156), 
+                    labels = c("Hong Kong", "Singapore", "Taiwan", "China")),
+    
+    # Dependent Variable: General View (High = Positive)
+    ImpactOnCountry = Q121, 
+    
+    # Independent Variable: Multi-dimensional Harm Index (0-2)
+    X_Harm_Index = rowMeans(across(c(Q124, Q126, Q128, Q129)), na.rm = TRUE),
+    
+    # Moderator: Institutional Trust Index (Combined Q69, Q70, Q71, Q74)
+    # Recoded: 5 - original score so that 4 = High Trust, 1 = No Trust
+    Inst_Trust_Index = rowMeans(across(c(Q69, Q70, Q71, Q74), ~ 5 - .x), na.rm = TRUE),
+    
+    # Dummy Variable: Personal Neighbor Preference (Q21)
+    # This is causing post-treatment effect and thus desert here. 
+    # 1 = Mentioned (Dislikes immigrant neighbors), 0 = Not mentioned (Accepts/Neutral)
+    # Neighbor_Dislike = ifelse(Q21 == 1, 1, 0),
+    
+    Edu = Q275, Income = Q288, Age = Q262
+  ) %>%
+  # Remove cases with missing values in key analytical variables
+  drop_na(ImpactOnCountry, X_Harm_Index, Inst_Trust_Index, Edu)
+
+# Mean-Centering for better analysis
+df_clean <- df_clean %>%
+  mutate(
+    PerceivedHarm = X_Harm_Index - mean(X_Harm_Index, na.rm = TRUE),
+    InstitutionTrust = Inst_Trust_Index - mean(Inst_Trust_Index, na.rm = TRUE)
+  )
+
+#model_1, simpliest
+model_simpliest <- lm(ImpactOnCountry ~ PerceivedHarm + InstitutionTrust + Region + Edu + Income + Age, data = df_clean)
+
+#model_2, regression in each country with interation term
+model_hkg <- lm(ImpactOnCountry ~ PerceivedHarm * InstitutionTrust  + Edu + Income + Age, data = filter(df_clean, Region == "Hong Kong"))
+model_sgp <- lm(ImpactOnCountry ~ PerceivedHarm * InstitutionTrust  + Edu + Income + Age, data = filter(df_clean, Region == "Singapore"))
+model_twn <- lm(ImpactOnCountry ~ PerceivedHarm * InstitutionTrust  + Edu + Income + Age, data = filter(df_clean, Region == "Taiwan"))
+model_chn <- lm(ImpactOnCountry ~ PerceivedHarm * InstitutionTrust  + Edu + Income + Age, data = filter(df_clean, Region == "China"))
+
+#model_3, regression with interation term and compare between countires
+model_full <- lm(ImpactOnCountry ~ PerceivedHarm * InstitutionTrust * Region + Edu + Income + Age, data = df_clean)
+```
+
+### **Research Question**
+
+If people think immigrants are harmful, does trusting the government make them less likely to believe immigration hurts their country?
+
+### **Summary**
+
+While perceived immigrant harm universally diminishes public support for immigration, institutional trust serves as a "buffer" primarily in high-migration counties like Hong Kong and Singapore. In these contexts, confidence in the state’s management capabilities acts as a form of psychological insurance, mitigating the negative impact of perceived risks on national development outlook. Conversely, this buffering effect is absent in Mainland China and Taiwan, where lower immigrant densities likely cause attitudes to be driven by general ideological beliefs rather than a trust-mediated evaluation of risk.
+
+### **Background**
+
+This project investigates the factors influencing public attitudes toward immigrants. As immigrants have become a vital part of developed nations, they deeply affect local economic structures, cultural integration, and community welfare. Consequently, public sentiment toward immigrants can significantly shape immigration policy and influence government responses to global migration. Therefore, understanding the drivers of these attitudes is crucial.
+
+In this research, we will focus on East Asia especially in China, Hong Kong, Taiwan, and Singapore, which share similar cultural and positional backgrounds but have different economical and political landscapes. Mainland China has a very small share of long-term foreign residents, and its policies are cautious, so most foreigners are short-term visitors or workers. Hong Kong is a migration city with many new arrivals from mainland China and a very large number of foreign domestic workers from places like the Philippines and Indonesia. Taiwan relies heavily on migrant workers from Southeast Asia and China in factories and long-term care, and also has many “new resident” families formed through cross-border marriage. Singapore is the most migration-dependent: a large share of its population is foreign workers and their families, with strict but well-developed systems that both attract high-skilled professionals and manage large numbers of low-skilled migrant workers.
+
+We aim to investigate how the views about immigration’s impact on national development are shaped by both attitudes toward immigrants and the trust toward their Government. 
+
+Our core idea is that trust in government can buffer the negative effect of hostile immigration attitudes on whether immigration benefits the country. People who strongly dislike immigrants are usually more pessimistic about immigration’s impact. However, if they also have high trust in the government, they may still believe that good policies can handle potential problems and turn immigration into benefits.  
+
+Above all, we propose following assumptions:
+
+1.  The higher an individual’s perceived harm regarding immigrants, the lower their belief that immigration will benefit the country’s development.
+
+2.  Higher levels of institutional trust are directly associated with a more positive evaluation of immigration's overall impact on the nation.
+
+3.  Institutional trust serves as a moderator that buffers the negative impact of perceived harm; specifically, the negative relationship between perceived harm and the belief in immigration's benefits will be weaker among individuals who have higher trust in their government.
+
+### **Data**
+
+Data for this study come from individual-level responses in the World Values Survey (WVS), collected between 2017 and 2022. The WVS is a cross-national survey of adult populations that asks standardized questions on values, political attitudes, and social views, including items on immigration, government trust, and perceptions of national development. The analysis focuses on four East Asian settings identified by the WVS country codes 344 (“Hong Kong”), 702 (“Singapore”), 158 (“Taiwan”), and 156 (“China”).
+
+The main outcome variable is Q121, which measures the perceived overall impact of immigrants on the country on a 1–5 scale (1 = very bad, 5 = very good). Perceived immigration harm is captured by an index based on four items: Q124, Q126, Q128, and Q129, asking whether immigration increases crime, terrorism, unemployment, and social conflict; each item is coded from 0 (“disagree,” more positive view) to 2 (“agree,” more negative view), and the index is constructed as their mean. Institutional trust is measured using four questions on confidence in the police, courts, government, and civil service (Q69, Q70, Q71, Q74), originally coded from 1 (“trust completely”) to 4 (“do not trust at all”) and then reverse-coded so that higher values indicate greater trust. Education (Q275), income (Q288), and age (Q262) are included as control variables, with higher values indicating higher levels of education, income, and age.
+
+Prior to analysis, the sample is restricted to respondents from the four selected settings, all special missing codes and negative values are recorded as NA, and cases with missing data on key variables are dropped. For models with interaction terms, both the Perceived Harm index and the Institutional Trust index are mean-centered to facilitate interpretation of coefficients. 
+
+A dummy variable based on Q21 (whether immigrants/foreign workers are mentioned as undesirable neighbors) is not included in the main models because it is likely post-treatment and could bias estimates of the relationship between perceived harm, institutional trust, and evaluations of immigration’s impact.
+
+Table1 shows the distribution of perceived harm and institutional trust by Region.
+
+```{r}
+#| label: tbl-descriptives
+#| tbl-cap: "Descriptive Statistics: Perceived Harm and Institutional Trust by Region"
+#| results: asis
+#| echo: false
+#| warning: false
+#| message: false
+
+p1 <- ggplot(df_clean, aes(x = X_Harm_Index, fill = Region)) +
+  geom_histogram(binwidth = 0.2, color = "white", alpha = 0.7) +
+  facet_wrap(~Region, nrow = 1) +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set1") +
+  labs(title = "Perceived Harm Distribution (Scale: 0-2)",
+       x = "Harm Score (Higher = More Threat)",
+       y = "Count") +
+  theme(legend.position = "none")
+
+p2 <- ggplot(df_clean, aes(x = Inst_Trust_Index, fill = Region)) +
+  geom_histogram(binwidth = 0.25, color = "white", alpha = 0.7) +
+  facet_wrap(~Region, nrow = 1) +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set2") +
+  labs(title = "Institutional Trust Distribution (Scale: 1-4)",
+       x = "Trust Score (Higher = More Trust)",
+       y = "Count") +
+  theme(legend.position = "none")
+
+p1 / p2
+```
+
+### **Methods**
+
+We employ a four-stage modeling approach. All models use Ordinary Least Squares (OLS) regression with mean-centered independent variables (Perceived Harm and Institutional Trust) to ensure the interpretability of coefficients and interaction terms.
+
+The first model establishes a global baseline across all regions. It evaluates the independent effects of perceived harm and institutional trust while controlling for regional "intercept shifts" and individual demographics. This model assumes the impact of harm and trust is identical across all societies.
+
+$$\begin{aligned}
+\text{ImpactOnCountry} = &\beta_0 + \beta_1(\text{PerceivedHarm}) + \beta_2(\text{InstitutionTrust}) \\
+&+ \beta_3(\text{Region}) + \beta_4(\text{Edu}) + \beta_5(\text{Income}) + \beta_6(\text{Age}) + \epsilon
+\end{aligned}$$
+
+The second involves running separate regressions for Hong Kong, Singapore, Taiwan, and China. Within each region, we include an interaction term between Perceived Harm and Institutional Trust. This directly tests our core hypothesis: that high levels of systemic confidence can mitigate (buffer) the negative relationship between perceived threat and immigration attitudes.
+
+$$\begin{aligned}
+\text{ImpactOnCountry} = &\beta_0 + \beta_1(\text{PerceivedHarm} \times \text{InstitutionTrust}) \\
+&+ \beta_2(\text{Edu}) + \beta_3(\text{Income}) + \beta_4(\text{Age}) + \epsilon
+\end{aligned}$$
+
+The final model is built onto the third model and compares the difference of the effect between countries. It utilizes a triple-interaction ($Harm \times Trust \times Region$) to evaluate if the buffering effect itself varies across different political and social systems to test the robustness of this complex relationship.
+
+$$\begin{aligned}
+\text{ImpactOnCountry} = &\beta_0 + \beta_1(\text{PerceivedHarm} \times \text{InstitutionTrust} \times \text{Region}) \\
+&+ \beta_2(\text{Edu}) + \beta_3(\text{Income}) + \beta_4(\text{Age}) + \epsilon
+\end{aligned}$$
+
+### **Results**
+
+Table 2 shows the results for the simplest formula, confirming that the perceived harm of immigrants and trust in government institutions play a significant role in public opinion regarding whether immigration aids national development. Specifically, for every unit increase in Perceived Harm, the belief that immigrants help the country's development drops by -0.35 units Conversely, Institution Trust has a significant positive effect of 0.20. In general, the more people perceive immigrants as a threat, the less they believe immigration helps development; meanwhile, higher institutional trust correlates with a more positive outlook on immigration's impact. When using Hong Kong as the reference group, we see that the other three countries have higher baseline beliefs that immigrants improve the country, with China showing the highest relative coefficient at 0.56, followed by Taiwan (0.42) and Singapore (0.39).
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+#| results: asis
+stargazer(model_simpliest, 
+          type = "latex",
+          title = "Model 1 - Pooled Additive Model Results",
+          column.labels = "Full Sample",
+          dep.var.labels = "Impact on Country",
+          no.space = TRUE,
+          single.row = TRUE,
+          font.size = "small",
+          digits = 2,
+          header = FALSE, 
+          keep.stat = c("n", "rsq", "adj.rsq"))
+```
+
+Table 3 presents the individual regional models, reconfirming the trends while introducing our variable of interest: the interaction term. The "buffering effect" (\$Perceived Harm \\times Institutional Trust\$) works as expected: in regions where it is significant, the effect is positive, meaning trust in government reduces the negative impact of perceived harm on immigration evaluations. This effect is statistically significant in Hong Kong (0.22, p \< 0.01) and Singapore (0.09, p \< 0.05), but is not significant in Taiwan (-0.01) or China (0.06). This aligns with the fact that Hong Kong and Singapore have a much larger proportion of immigrants; for citizens in Taiwan (\$N=1,213\$) and China (\$N=2,935\$), the lack of regular interaction with immigrants may mean that while direct associations exist, the complex "indirect" buffering association is less relevant to their daily lives.
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+#| results: asis
+stargazer(model_hkg, model_sgp, model_twn, model_chn,
+          type = "latex",
+          title = "Model 2 - Regional Interaction Model Results",
+          column.labels = c("Hong Kong", "Singapore", "Taiwan", "China"),
+          dep.var.labels = "Impact on Country",
+          no.space = TRUE,
+          single.row = TRUE,
+          font.size = "small",
+          digits = 2,
+          header = FALSE,
+          keep.stat = c("n", "rsq", "adj.rsq"))
+```
+
+Table 4 displays the third model comparing the buffering effect across countries. We find that we cannot statistically differentiate the buffering effect between Hong Kong and Singapore (Perceived Harm:Institution Trust:Region Singapore = -0.13, p \< 0.1), but we can differentiate Hong Kong from Taiwan (-0.24, p \< 0.01) and China (-0.16, p \< 0.05)10. The negative coefficients for these interactions indicate that Taiwan and China have significantly lower buffering effects than the Hong Kong baseline. Regarding the direct effect of Perceived Harm, Taiwan and China are unable to be differentiated from Hong Kong (0.05 and 0.04 respectively), whereas for Institution Trust, Singapore ( -0.02, p \> 0.1) is similar to Hong Kong. This is reasonable as Singapore shares a similar immigrant proportion with Hong Kong, while China is an outlier due to its unique combination of low immigrant levels and a distinct landscape of government trust, where the trust effect is -0.22 units lower (p \< 0.01) than in Hong Kong. For Taiwan, a less stable political environment compared to HongKong and Singapore may explain why the belief in the government as a buffer on immigration issues is significantly lower by -0.11 units (p \< 0.05).
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+#| results: asis
+stargazer(model_full,
+          type = "latex",
+          title = "Model 3 - Full Triple-Interaction Model Results",
+          column.labels = "Global Interaction",
+          dep.var.labels = "Impact on Country",
+          no.space = TRUE,
+          single.row = TRUE,
+          font.size = "small",
+          digits = 2,
+          header = FALSE,
+          keep.stat = c("n", "rsq", "adj.rsq"))
+```
+
+### **Discussion**
+
+From the results, we can conclude that, firstly perceived harm of immigrants and the trust of government are powerful and universal predictors of immigration attitudes across all sampled regions.Consistent with our initial hypothesis, the more individuals perceive immigrants as a threat to crime, security, or the economy, the less they believe immigration benefits the country's development.Conversely, higher levels of trust in government institutions (Police, Courts, Civil Service) are associated with more positive evaluations of immigration's impact.Notably, when using Hong Kong as a reference, China, Singapore, and Taiwan all exhibit a higher "baseline" belief in the benefits of immigration, suggesting that Hong Kong's unique socio-political environment may foster a more skeptical starting point for these attitudes, for example, there is a lot of China mainland immigrants that is not welcomed.
+
+We also confirmed the Buffering Effect ($PerceivedHarm \times InstitutionalTrust$). In high-immigrant societies,like Hong Kong and Singapore—regions with high proportions of foreign-born residents—institutional trust successfully mitigates the negative impact of perceived harm.This suggests that in these contexts, a "strong state" serves as a psychological insurance policy: even if citizens fear the risks associated with immigration, their confidence in the government's ability to manage those risks prevents their general attitude from becoming overly negative.However, this buffering mechanism is notably absent in Taiwan and China, as the lack of daily interaction with immigrants in these regions may mean that attitudes are driven by general ideological beliefs rather than the sophisticated "trust-risk" trade-offs seen in more internationalized hubs.
+
+The model faces the possibility of endogeneity that is brought by whether the person likes immigrants or not in general for some reason like nationalism. If the person dislikes immigrants, then it is more likely to have higher perception of harm, and in the meanwhile lower opinion of immigrants help the development of country.
+
+### **Reference**
+
+“List of Sovereign States by Immigrant and Emigrant Population.” Wikipedia, 10 Mar. 2024, en.wikipedia.org/wiki/List_of_sovereign_states_by_immigrant_and_emigrant_population.
+
+Hainmueller, J., & Hopkins, D. J. (2014). Public attitudes toward immigration. Annual review of political science, 17(1), 225-249.
+
+Stoyan, A. T., & Niedzwiecki, S. (2018). Decentralization and democratic participation: The effect of subnational self-rule on voting in Latin America and the Caribbean. Electoral Studies, 52, 26–35.[ ](https://doi.org/10.1016/j.electstud.2017.12.001)
+
+Heo, N. (2024). “Generalized trust and attitudes toward immigrants in East Asia.” International Journal of Intercultural Relations.
