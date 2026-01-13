@@ -149,7 +149,7 @@ p1
 
 ### **Methods**
 
-We employ a four-stage modeling approach. All models use Ordinary Least Squares (OLS) regression with mean-centered independent variables (Institutional Trust) to ensure the interpretability of coefficients and interaction terms.
+We employ a three-stage modeling approach. All models use Ordinary Least Squares (OLS) regression with mean-centered independent variables (Institutional Trust) to ensure the interpretability of coefficients and interaction terms.
 
 The first model establishes a global baseline across all regions. It evaluates the independent effects of perceived harm and institutional trust while controlling for regional "intercept shifts" and individual demographics. This model assumes the impact of harm and trust is identical across all societies.
 
