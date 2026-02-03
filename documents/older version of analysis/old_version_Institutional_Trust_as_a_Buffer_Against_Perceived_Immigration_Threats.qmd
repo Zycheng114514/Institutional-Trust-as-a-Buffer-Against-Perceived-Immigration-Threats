@@ -1,0 +1,257 @@
+---
+title: "Institutional Trust as a Buffer Against Perceived Immigration Threats"
+subtitle: "A Comparative Analysis of Four East Asian Societies"
+author: "Zhiyang(Chris) Cheng, Jingwen(Wendy) Xiao"
+format: 
+  pdf:
+    mainfont: "Times New Roman"
+    fontsize: 12pt
+    linestretch: 1.0
+---
+
+```{r, include=FALSE}
+library(pacman)
+p_load(tidyverse,ggplot2,haven,interactions,sjPlot,psych,patchwork,stargazer)
+dta <- readRDS("../data/WVS_Cross-National_Wave_7_rds_v6_0.rds")
+
+dta$B_COUNTRY_num <- as.numeric(dta$B_COUNTRY)
+
+#extract needed variables
+df_analysis <- dta %>%
+  filter(B_COUNTRY_num %in% c(344, 702, 158, 156)) %>% 
+  select(
+    Country = B_COUNTRY_num,
+    Q121, # The Overall impact of immigrants on the country (1-5, 5=Very Good)
+    Q124, Q126, Q128, Q129, # Perceived harms (Crime, Terror, Jobs, Conflict)(0-2,2 means agree, which is the most negative view)
+    Q69, Q70, Q71, Q74, # Government Trust (Police, Courts, Gov, Civil Service)(1-4,1 means trust the most)
+#   Q21,  #This is causing post-treatment effect. Neighbor Preference (Immigrants/Foreign workers)(1 is dislike, 2 is did not meantion)
+    Q275, Q288, Q262 # Controls: Education(1-8,larger better), Income(1-10, larger better), Age
+  ) %>%
+  zap_labels() %>%
+  mutate(across(everything(), as.numeric))
+
+# reorgnize the variables
+df_clean <- df_analysis %>%
+  # Convert unusual values to R's NA
+  mutate(across(everything(), ~ifelse(.x < 0, NA, .x))) %>%
+  mutate(
+    Region = factor(Country, 
+                    levels = c(344, 702, 158, 156), 
+                    labels = c("Hong Kong", "Singapore", "Taiwan", "China")),
+    
+    # Dependent Variable: General View (High = Positive)
+    ImpactOnCountry = Q121, 
+    
+    # Independent Variable: Multi-dimensional Harm Index (0-2)
+    X_Harm_Index = rowMeans(across(c(Q124, Q126, Q128, Q129)), na.rm = TRUE),
+    
+    # Moderator: Institutional Trust Index (Combined Q69, Q70, Q71, Q74)
+    # Recoded: 5 - original score so that 4 = High Trust, 1 = No Trust
+    Inst_Trust_Index = rowMeans(across(c(Q69, Q70, Q71, Q74), ~ 5 - .x), na.rm = TRUE),
+    
+    # Dummy Variable: Personal Neighbor Preference (Q21)
+    # This is causing post-treatment effect and thus desert here. 
+    # 1 = Mentioned (Dislikes immigrant neighbors), 0 = Not mentioned (Accepts/Neutral)
+    # Neighbor_Dislike = ifelse(Q21 == 1, 1, 0),
+    
+    Edu = Q275, Income = Q288, Age = Q262
+  ) %>%
+  # Remove cases with missing values in key analytical variables
+  drop_na(ImpactOnCountry, X_Harm_Index, Inst_Trust_Index, Edu)
+
+# Mean-Centering for better analysis
+df_clean <- df_clean %>%
+  mutate(
+    PerceivedHarm = X_Harm_Index - mean(X_Harm_Index, na.rm = TRUE),
+    InstitutionTrust = Inst_Trust_Index - mean(Inst_Trust_Index, na.rm = TRUE)
+  )
+
+#model_1, simpliest
+model_simpliest <- lm(ImpactOnCountry ~ InstitutionTrust + Region + Edu + Income + Age, data = df_clean)
+
+#model_2, regression in each country with interation term
+model_hkg <- lm(ImpactOnCountry ~ InstitutionTrust  + Edu + Income + Age, data = filter(df_clean, Region == "Hong Kong"))
+model_sgp <- lm(ImpactOnCountry ~ InstitutionTrust  + Edu + Income + Age, data = filter(df_clean, Region == "Singapore"))
+model_twn <- lm(ImpactOnCountry ~ InstitutionTrust  + Edu + Income + Age, data = filter(df_clean, Region == "Taiwan"))
+model_chn <- lm(ImpactOnCountry ~ InstitutionTrust  + Edu + Income + Age, data = filter(df_clean, Region == "China"))
+
+#model_3, regression with interation term and compare between countires
+model_full <- lm(ImpactOnCountry ~ InstitutionTrust * Region + Edu + Income + Age, data = df_clean)
+```
+
+### **Research Question**
+
+How does institutional trust shape attitudes toward immigration? Evidence from East Asia.
+
+### **Summary**
+
+This study uses data from the World Values Survey (2017–2022) to examine how trust in government institutions shapes public attitudes toward immigration in China, Hong Kong, Taiwan, and Singapore. Across the pooled sample, higher levels of institutional trust are consistently associated with more favorable evaluations of immigration’s impact on the country. Region-specific and interaction models show that this trust effect is strongest in Hong Kong and Singapore, more moderate in Taiwan, and substantially weaker in mainland China, even after controlling for education, income, and age. Taken together, the findings suggest that when citizens view state institutions as competent and reliable, especially in high-immigration settings—they are more inclined to believe that governments can manage risks and turn immigration into a national benefit rather than a threat.
+
+### **Background**
+
+This project investigates the factors influencing public attitudes toward immigrants. As immigrants have become a vital part of developed nations, they deeply affect local economic structures, cultural integration, and community welfare. Consequently, public sentiment toward immigrants can significantly shape immigration policy and influence government responses to global migration. Therefore, understanding the drivers of these attitudes is crucial.
+
+In this research, we focus on East Asia specifically Mainland China, Hong Kong, Taiwan, and Singapore, which share similar cultural and geographic backgrounds but possess distinct economic and political landscapes. Mainland China maintains a very small share of long-term foreign residents and follows cautious policies, with most foreigners being short-term visitors or workers. Hong Kong is a migration-centric city with many new arrivals from Mainland China and a very large population of foreign domestic workers from countries such as the Philippines and Indonesia. Taiwan relies heavily on migrant workers from Southeast Asia and China in manufacturing and long-term care, and also features many “new resident” families formed through cross-border marriages. Singapore is the most migration-dependent: a large share of its population consists of foreign workers and their families, managed by strict but well-developed systems that both attract high-skilled professionals and regulate large numbers of low-skilled migrant workers.
+
+We aim to investigate how trust toward the government affects people's views regarding immigration’s impact on national development.
+
+The core premise of our research is that trust in government can moderate the negative impact of hostile immigration attitudes on the perceived benefits of immigration. While individuals with negative views toward immigrants are typically more pessimistic about their impact, high levels of institutional trust may lead them to believe that effective governance can mitigate risks and ensure that immigration yields national benefits.
+
+Furthermore, because Hong Kong and Singapore have significantly higher proportions of immigrants compared to Taiwan and Mainland China, their citizens experience more frequent interactions and higher levels of engagement with immigration issues. Consequently, in Hong Kong and Singapore, public evaluations of immigration's impact are likely more sensitive to the level of trust citizens place in their government.
+
+Based on this framework, we propose the following hypotheses:
+
+H1: Higher levels of institutional trust are positively associated with a more favorable evaluation of immigration’s overall impact on the nation.
+
+H2: The positive effect of institutional trust (the estimated coefficient) will be significantly stronger in Hong Kong and Singapore than in Taiwan and Mainland China.
+
+### **Data**
+
+Data for this study come from individual-level responses in the World Values Survey (WVS) Wave 7, collected between 2017 and 2022. The WVS is a cross-national survey of adult populations that asks standardized questions on values, political attitudes, and social views, including items on immigration, government trust, and perceptions of national development. The analysis focuses on four East Asian settings: Mainland China, Hong Kong, Taiwan, and Singapore.
+
+The main outcome variable is Q121, which measures the perceived overall impact of immigrants on the development of the country on a 1–5 scale (1 = very bad, 5 = very good). Institutional trust, our primary explanatory variable, is measured using four questions on confidence in the police, courts, the government, and the civil service (Q69, Q70, Q71, Q74). These items were originally coded from 1 (“A great deal”) to 4 (“None at all”) and have been reverse-coded so that higher values indicate greater institutional trust. For the analysis, these four items are combined into a composite Institutional Trust Index.
+
+Education (Q275), income (Q288), and age (Q262) are included as control variables, with higher values indicating higher levels of education, income, and age respectively.
+
+Prior to analysis, the sample is restricted to respondents from the four selected settings. All special missing codes and negative values are recoded as NA, and cases with missing data on key variables are dropped. To facilitate the comparison of coefficients across different regions and to test the interaction effects proposed in H2, the Institutional Trust index is mean-centered.
+
+A dummy variable based on Q21 (whether immigrants/foreign workers are mentioned as undesirable neighbors) is excluded from the main models. As this variable captures personal prejudice or hostile attitudes, it is likely post-treatment or collinear with the outcome variable, and its inclusion could bias the estimates of the relationship between institutional trust and evaluations of immigration’s impact.
+
+```{r}
+#| label: fig-trust-dist
+#| fig-cap: "Institutional Trust Distribution by Region (Scale: 1–4)"
+#| fig-align: center
+#| echo: false
+#| warning: false
+#| message: false
+
+
+p1 <- ggplot(df_clean, aes(x = Inst_Trust_Index, fill = Region)) +
+  geom_histogram(
+    aes(y = after_stat(count / sum(count))),
+    binwidth = 0.25,
+    color = "white",
+    alpha = 0.7
+  ) +
+  facet_wrap(~Region, nrow = 1) +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set2") +
+  scale_y_continuous(labels = scales::percent) +
+  labs(
+    title = "Institutional Trust Distribution (Scale: 1–4)",
+    x = "Trust Score (Higher = More Trust)",
+    y = "Percentage"
+  ) +
+  theme(legend.position = "none")
+
+p1
+```
+
+### **Methods**
+
+We employ a three-stage modeling approach. All models use Ordinary Least Squares (OLS) regression with mean-centered independent variables (Institutional Trust) to ensure the interpretability of coefficients and interaction terms.
+
+The first model establishes a global baseline across all regions. It evaluates the independent effects of perceived harm and institutional trust while controlling for regional "intercept shifts" and individual demographics. This model assumes the impact of harm and trust is identical across all societies.
+
+$$\begin{aligned}
+\text{ImmigrantsGood} = &\beta_0 + \beta_1\text{InstitutionTrust} \\
+&+ \beta_2\text{Region} + \beta_3\text{Edu} + \beta_4\text{Income} + \beta_5\text{Age} + \epsilon
+\end{aligned}$$
+
+Model 2 employs region-specific regressions, allowing all coefficients to vary freely across societies. This approach enables a more granular understanding of how each predictor operates within the unique socio-political context of each individual region.
+
+$$
+\begin{aligned}
+\text{ImmigrantsGood}_i =\ & \beta_0  + \beta_1 \text{InstitutionTrust}_i \\ & + \beta_2 \text{Edu}_i + \beta_3 \text{Income}_i + \beta_4 \text{Age}_i + \varepsilon_i \end{aligned}
+$$
+
+Model 3 introduces interaction terms between institutional trust and region indicators, allowing the marginal effect of institutional trust on immigration attitudes to vary across societies while retaining region-specific intercepts.
+
+$$
+\begin{aligned}
+\text{ImmigrantsGood}_i =\ & \beta_0 + \beta_1 \text{InstitutionTrust}_i + \boldsymbol{\beta_2}\,\text{Region}_i \\ &+ \boldsymbol{\beta_3}\, (\text{InstitutionTrust}_i \times \text{Region}_i) + \beta_4 \text{Edu}_i + \beta_5 \text{Income}_i + \beta_6 \text{Age}_i + \varepsilon_i \end{aligned}
+$$
+
+### **Results**
+
+Results from the pooled additive model (Table 1) show that institutional trust is positively and statistically significantly associated with more favorable evaluations of immigration’s impact across the full sample. On average, a one-unit increase in institutional trust is associated with a 0.25-point increase in the perceived impact score (p \< 0.01). Relative to the reference region (Hong Kong), respondents in Singapore (β = 0.47), Taiwan (β = 0.42), and China (β = 0.69) report significantly more positive baseline attitudes toward immigration, indicating substantial regional differences in starting points.
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+#| results: asis
+stargazer(model_simpliest, 
+          type = "latex",
+          title = "Model 1 - Pooled Additive Model Results",
+          column.labels = "Full Sample",
+          dep.var.labels = "Impact on Country",
+          no.space = TRUE,
+          single.row = TRUE,
+          font.size = "small",
+          digits = 2,
+          header = FALSE, 
+          keep.stat = c("n", "rsq", "adj.rsq"))
+```
+
+Table 2 presents region-specific regressions, allowing all coefficients to vary freely across societies. The results reveal pronounced heterogeneity in the magnitude of the trust effect. The positive association between institutional trust and immigration attitudes is strongest in Hong Kong (β = 0.38) and Singapore (β = 0.35), moderate in Taiwan (β = 0.20), and substantially weaker in China (β = 0.07), though still statistically significant. These estimates suggest that trust in government translates more strongly into positive immigration evaluations in contexts characterized by higher immigration exposure and more frequent daily interaction with immigrants.
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+#| results: asis
+stargazer(model_hkg, model_sgp, model_twn, model_chn,
+          type = "latex",
+          title = "Model 2 - Regional Interaction Model Results",
+          column.labels = c("Hong Kong", "Singapore", "Taiwan", "China"),
+          dep.var.labels = "Impact on Country",
+          no.space = TRUE,
+          single.row = TRUE,
+          font.size = "small",
+          digits = 2,
+          header = FALSE,
+          keep.stat = c("n", "rsq", "adj.rsq"))
+```
+
+Table 3 further formalizes these differences using a pooled interaction model. Institutional trust remains strongly associated with more favorable immigration attitudes in the baseline region (Hong Kong; β = 0.40, p \< 0.01). However, the negative and statistically significant interaction terms for Taiwan (β = −0.21) and especially China (β = −0.33) indicate that the marginal effect of institutional trust is significantly weaker in these societies. In contrast, the interaction term for Singapore is small and statistically insignificant, implying that the effect of institutional trust in Singapore is comparable in magnitude to that observed in Hong Kong. Together, these results provide robust evidence of regional heterogeneity in how institutional trust shapes immigration attitudes.
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+#| results: asis
+stargazer(model_full,
+          type = "latex",
+          title = "Model 3 - Full Triple-Interaction Model Results",
+          column.labels = "Global Interaction",
+          dep.var.labels = "Impact on Country",
+          no.space = TRUE,
+          single.row = TRUE,
+          font.size = "small",
+          digits = 2,
+          header = FALSE,
+          keep.stat = c("n", "rsq", "adj.rsq"))
+```
+
+### **Discussion**
+
+The findings of this study provide strong support for the argument that trust in government institutions is a consistent and robust predictor of immigration attitudes across East Asian societies. Consistent with Hypothesis 1, individuals who perceive immigrants as posing greater threats to crime, security, or the economy are less likely to believe that immigration benefits national development, while higher levels of institutional trust which measured through confidence in the police, courts and civil service, are associated with more favorable evaluations of immigration’s impact.
+
+At the same time, the results reveal substantial regional heterogeneity in the magnitude of this relationship. In line with Hypothesis 2, the positive effect of institutional trust is significantly stronger in Hong Kong and Singapore than in Taiwan and mainland China. In high-immigration contexts such as Hong Kong and Singapore, where citizens experience frequent interaction with immigrants and immigration is a salient policy issue, trust in government appears to function as a meaningful buffer against concerns about immigration-related harm. Individuals who hold reservations about immigrants but trust state institutions may believe that effective governance can mitigate risks and ensure positive outcomes.
+
+In contrast, the weaker trust effects observed in Taiwan and especially in mainland China suggest that immigration attitudes in these contexts may be shaped less by confidence in institutional management and more by broader ideological orientations or limited direct exposure to immigrants. In mainland China, where long-term immigration remains relatively rare, the translation of institutional trust into support for immigration appears particularly constrained.
+
+These findings are consistent with evidence from other political contexts. Research on the American mass public demonstrates that individuals with higher levels of political trust are more supportive of pro-immigration policies even after accounting for partisanship and attitudes toward immigrant groups. Taken together, the evidence suggests that the positive association between institutional trust and immigration attitudes is not confined to Western democracies but operates across diverse political and cultural settings, though its strength depends critically on social and policy context.As a result, the findings should be interpreted as correlational rather than strictly causal.
+
+### **Reference**
+
+“List of Sovereign States by Immigrant and Emigrant Population.” Wikipedia, 10 Mar. 2024, en.wikipedia.org/wiki/List_of_sovereign_states_by_immigrant_and_emigrant_population.
+
+Hainmueller, J., & Hopkins, D. J. (2014). Public attitudes toward immigration. Annual review of political science, 17(1), 225-249.
+
+Stoyan, A. T., & Niedzwiecki, S. (2018). Decentralization and democratic participation: The effect of subnational self-rule on voting in Latin America and the Caribbean. Electoral Studies, 52, 26–35.[ ](https://doi.org/10.1016/j.electstud.2017.12.001)
+
+Heo, N. (2024). “Generalized trust and attitudes toward immigrants in East Asia.” International Journal of Intercultural Relations.
+
+Macdonald, David. “Political Trust and Support for Immigration in the American Mass Public.” British Journal of Political Science, vol. 51, no. 4, 17 Mar. 2020, pp. 1–19, https://doi.org/10.1017/s0007123419000668.

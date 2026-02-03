@@ -1,7 +1,7 @@
 ---
 title: "Institutional Trust as a Buffer Against Perceived Immigration Threats"
 subtitle: "A Comparative Analysis of Four East Asian Societies"
-author: "Zhiyang(Chris) Cheng, Jinwen(Wendy) Xiao"
+author: "Zhiyang(Chris) Cheng, Jingwen(Wendy) Xiao"
 format: 
   pdf:
     mainfont: "Times New Roman"
@@ -12,7 +12,7 @@ format:
 ```{r, include=FALSE}
 library(pacman)
 p_load(tidyverse,ggplot2,haven,interactions,sjPlot,psych,patchwork,stargazer)
-dta <- readRDS("data/WVS_Cross-National_Wave_7_rds_v6_0.rds")
+dta <- readRDS("../data/WVS_Cross-National_Wave_7_rds_v6_0.rds")
 
 dta$B_COUNTRY_num <- as.numeric(dta$B_COUNTRY)
 
