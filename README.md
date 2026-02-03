@@ -1,4 +1,4 @@
-# Institutional Trust as a Buffer Against Perceived Immigration Threats -- A Comparative Analysis of Four East Asian Societies
+## Institutional Trust as a Buffer Against Perceived Immigration Threats 
 
 This repository contains materials for investigating the relationship between institutional trust and public attitudes toward immigration. Focusing on **Mainland China, Hong Kong, Taiwan, and Singapore**, this project explores how confidence in state institutions moderates the perception of immigration as a national benefit.
 
